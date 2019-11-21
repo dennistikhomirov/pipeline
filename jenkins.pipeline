@@ -1,0 +1,53 @@
+
+pipeline {
+
+    environment {
+         BUILD_N= new Date().format('yy.MM.dd.HH.mm')
+     }
+
+    agent { label 'master' }
+
+    stages {
+
+        stage('build') {
+            steps {
+              sh "git clone https://github.com/dennistikhomirov/pipeline.git"
+              sh "mvn -f pipeline/pom.xml clean package"
+            }
+        }
+
+        stage('Sonarqube') {
+            environment {
+                scannerHome = tool 'MySonarScanner'
+            }
+            steps {
+                sh "pwd "
+                    withSonarQubeEnv('mysonar') {
+                        sh 'mvn -f pipeline/pom.xml  sonar:sonar'
+                }
+            }
+        }
+
+         stage('Deploy') {
+            steps {
+                sh "cp pipeline/target/*.war /var/lib/tomcat/webapps/"
+            }
+        }
+
+        stage('Upload to Nexus') {
+            steps {
+                sh 'curl -v -u jenkins:jenkins --upload-file pipeline/target/java-web-project.war http://localhost:8181/repository/maven-releases/com/java-web-project/${BUILD_N}/java-web-project-${BUILD_N}.war '
+           }
+        }
+
+        stage('Post-build') {
+           steps { echo "Congrats! Build was successful!!!" }
+        }
+    }
+
+    post {
+        always {
+            sh 'rm -rf /var/lib/jenkins/workspace/devops-pipe/pipeline'
+           }
+    }
+}
